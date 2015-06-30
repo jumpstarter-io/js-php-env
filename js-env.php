@@ -74,3 +74,35 @@ function js_env_get_siteurl() {
         throw new Exception("auto-domain not found in env");
     return "https://" . $auto_domain;
 }
+
+function js_env_token_auth_verify($z) {
+    $x = js_env_get_value("ident.container.session_key");
+    // Sanity check $x and $z.
+    if (!is_string($z) || !is_string($x))
+        return false;
+    if (strlen($z) != 144 || strlen($x) != 64)
+        return false;
+    if (!ctype_xdigit($z) || !ctype_xdigit($x))
+        return false;
+    // Decode all cookie parameters.
+    $z_raw = hex2bin($z);
+    $e_raw = substr($z_raw, 0, 8);
+    // Expire time.
+    $e = implode(unpack("N", substr($e_raw, 4, 4)));
+    // Random salt.
+    $y = substr($z_raw, 8, 32);
+    // sha256 hash signature.
+    $h = substr($z_raw, 40);
+    // Cookie must not have expired.
+    if ($e < time())
+        return false;
+    // Calculate the signature we expect.
+    $h_challenge = hash("sha256", ($e_raw . $y . hex2bin($x)), true);
+    // Sanity check before comparing.
+    if (!is_string($h) || strlen($h) != 32)
+        return false;
+    if (!is_string($h_challenge) || strlen($h_challenge) != 32)
+        return false;
+    // Final authorization.
+    return ($h === $h_challenge);
+}
